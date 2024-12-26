@@ -1,0 +1,11 @@
+TRAIN: data/flower_dataset/images/train
+VAL: data/flower_dataset/images/val
+SIZE: 448
+
+CLASS_INFO: {
+  0: 'rose',
+  1: 'lotus',
+  2: 'hibiscuss',
+  3: 'marigold',
+  4: 'sunflower'
+}
