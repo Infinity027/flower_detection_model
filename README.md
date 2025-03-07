@@ -1,6 +1,6 @@
 # <div align="center">Flower Detection Model</div>
 <p align="center">
-  <img alt="Characters" src="results/plot_images.png" title="Images" width="50%"/>
+  <img alt="Characters" src="results/plot_images.png" title="Images" width="60%"/>
 </p>
 
 ---
@@ -18,8 +18,8 @@ The model has been trained on a custom dataset and is capable of detecting these
 1. [Description](#description)   
 2. [Installation](#installation)
 3. [Dataset](#dataset)  
-4. [Training](#model-training)
-5. [Result](#text-segmentation)
+4. [Training](#training)
+5. [Result](#result)
 
 ---
 ## [Description]
@@ -71,7 +71,7 @@ Organize your dataset as follows:
           ├── train/
           └── val/
 
-##[Training]
+## [Training]
 To train the model, run the training script with appropriate arguments. For example:
 ```python
 python train.py --yaml_path data/flowers.yaml --epochs 100 --batch_size 16 --lr 0.001
@@ -84,7 +84,7 @@ python train.py --yaml_path data/flowers.yaml --epochs 100 --batch_size 16 --lr 
     4. --lr: Learning rate.
     5. Other options include NMS thresholds, resume training, etc.
     
-##[Result]
+## [Result]
 
 Below are some sample results:
 ![Graph](results/val_loss.png 'Validation Graph')
