@@ -16,52 +16,21 @@ from utils.metrics import (Evaluator, build_basic_logger, generate_random_color,
 
 
 @torch.no_grad()
-def validate(args, dataloader, model, evaluator, epoch=0, save_result=False):
+def validate(args, dataloader, model, loss_fn):
     loop = tqdm(dataloader, leave=True)
     model.eval()
-    check_images, check_preds, check_results = [], [], []
 
     for _, (x,y) in enumerate(loop):
         preds = model(x)
-
-        for j in range(len(x)):
-            pred = preds[j].cpu().numpy()
-            pred[:, 2:] = xywh_to_x1y1x2y2(boxes=preds[:, 2:], clip_max=1.0)
-            pred = filter_confidence(prediction=pred, conf_threshold=args.conf_thres)
-            pred = run_NMS(prediction=pred, iou_threshold=args.nms_thres)
-
-            if len(check_images) < 5:
-                check_images.append(to_image(images[j]))
-                check_preds.append(pred.copy())
-                
-            if len(pred) > 0:
-                shape = 448
-                cls_id = pred[:, [0]]
-                conf = pred[:, [-1]]
-                box_x1y1x2y2 = scale_coords(img1_shape=448, coords=pred[:, 1:5], img0_shape=shape[:2])
-                box_x1y1wh = transform_x1y1x2y2_to_x1y1wh(boxes=box_x1y1x2y2)
-                img_id = np.array((imageToid[filename],) * len(cls_id))[:, np.newaxis]
-                cocoPred.append(np.concatenate((img_id, box_x1y1wh, conf, cls_id), axis=1))
     
-    del images, predictions
-    torch.cuda.empty_cache()
 
-    if (epoch % args.img_interval == 0) and args.img_log_dir:
-        for k in range(len(check_images)):
-            check_image = check_images[k]
-            check_pred = check_preds[k]
-            check_result = visualize_prediction(image=check_image, prediction=check_pred, class_list=args.class_list, color_list=args.color_list)
-            check_results.append(check_result)
-        concat_result = np.concatenate(check_results, axis=1)
-        imwrite(str(args.img_log_dir / f"EP-{epoch:03d}.jpg"), concat_result)
-
-    if len(cocoPred) > 0:
-        cocoPred = np.concatenate(cocoPred, axis=0)
-        mAP_dict, eval_text = evaluator(predictions=cocoPred)
-        return mAP_dict, eval_text
-    else:
-        return None, None
-
+def perfect_box():
+    best_score, best_ind = torch.max(pred_score,dim=-1, keepdim=True)
+    finale_box = (1-best_ind) * pred_box[..., :4]+ best_ind * pred_box[..., 4:]
+    finale_box = self.transform_pred_box(finale_box)
+    _, pred_label = pred_cls.max(dim=-1)
+            # return torch.Size[batch_size, S, S, 1+1+4]
+    return torch.cat((pred_label.unsqueeze(-1), best_score, finale_box), dim=-1)
 
 def result_analyis(args, mAP_dict):
     analysis_result = analyse_mAP_info(mAP_dict, args.class_list)

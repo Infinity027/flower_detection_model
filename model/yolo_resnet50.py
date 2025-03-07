@@ -2,7 +2,7 @@ import torch.nn as nn
 import torchvision.models as models
 import torch
 
-class YOLO_resnet50(nn.Module):
+class YOLOResnet50(nn.Module):
     """
     Model with three components:
     1. Backbone of resnet50 pretrained on 224x224 images from Imagenet
@@ -15,12 +15,12 @@ class YOLO_resnet50(nn.Module):
             p1, p2, ...., pC-1, pC  # class conditional probabilities
         ] for each S*S grid cell
     """
-    def __init__(self, im_size, num_classes, device = "cpu"):
-        super(YOLO_resnet50, self).__init__()
+    def __init__(self, im_size, num_classes, S=7, B=2, device = "cpu"):
+        super(YOLOResnet50, self).__init__()
         self.im_size = im_size
         self.im_channels = 3
-        self.B = 2
-        self.S = 7
+        self.B = B
+        self.S = S
         self.C = num_classes
         self.device = device
 
@@ -48,60 +48,31 @@ class YOLO_resnet50(nn.Module):
             nn.LeakyReLU(0.1)
         )
 
-        self.fc_yolo_layers = nn.Sequential(
+        self.yolo_fc_layers = nn.Sequential(
                 nn.Flatten(),
-                nn.Linear(self.im_size//32 * self.im_size//32 * 512, 4096),
+                nn.Linear(self.im_size//32 * self.im_size//32 * 512, 496),
                 nn.LeakyReLU(0.1),
-                nn.Dropout(0.5),
-                nn.Linear(4096, self.S * self.S * (5 * self.B + self.C))
+                nn.Dropout(0.1),
+                nn.Linear(496, self.S * self.S * (5 * self.B + self.C))
             )
-        
-    def transform_pred_box(self, pred_box):
-        shifts_x = torch.arange(0, self.S, dtype=torch.float32, device=self.device) / self.S
-        shifts_y = torch.arange(0, self.S, dtype=torch.float32, device=self.device) / self.S
-        shifts_y, shifts_x = torch.meshgrid(shifts_y, shifts_x, indexing="ij")
-        xc = (pred_box[..., 0] + shifts_x) / self.S
-        yc = (pred_box[..., 1] + shifts_y) / self.S
-        w = pred_box[..., 2]
-        h = pred_box[..., 3]
-        return torch.stack((xc, yc, w, h), dim=-1)
-    
-    def yolo_reshape(self, x):
-        x = x.reshape((-1,self.S,self.S,self.B*5+self.C))
-        pred_cls = torch.softmax(x[..., :self.C], dim=-1)
-        pred_score = torch.sigmoid(x[..., self.C:self.C+self.B])
-        pred_box = torch.sigmoid(x[..., self.C+self.B:])
-        if self.training:
-            return torch.cat((pred_cls, pred_score, pred_box), dim=-1)
-        else:
-            best_score, best_ind = torch.max(pred_score,dim=-1, keepdim=True)
-            finale_box = (1-best_ind) * pred_box[..., :4]+ best_ind * pred_box[..., 4:]
-            finale_box = self.transform_pred_box(finale_box)
-            _, pred_label = pred_cls.max(dim=-1)
-            # return torch.Size[batch_size, S, S, 1+1+4]
-            return torch.cat((pred_label.unsqueeze(-1), best_score, finale_box), dim=-1)
-
 
     def forward(self, x):
-        out = self.backbone(x)
-        out = self.yolo_conv_layers(out)
-        out = self.fc_yolo_layers(out)
-        out = self.yolo_reshape(out)
-        return out
+        batch_size = x.shape[0]
+        out = self.yolo_fc_layers(self.yolo_conv_layers(self.backbone(x)))
+        pred_cls = out[...,:self.C]
+        pred_obj_box = torch.sigmoid(out[...,self.C:])
+        out = torch.cat((pred_cls, pred_obj_box), dim=-1)
 
+        #shape = [batch_size, -1, classes+(conf + xc + yc + wh)*self.B]
+        return out.reshape(batch_size,-1,self.B*5+self.C)
 
 if __name__ == "__main__":
     input_size = 448
     num_classes = 5
     inp = torch.randn(2, 3, input_size, input_size)
-    device = 'cpu'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = YOLO_resnet50(im_size=input_size, num_classes=num_classes, device = device).to(device)
+    model = YOLOResnet50(im_size=input_size, num_classes=num_classes, device = device).to(device)
     model.train()
     out = model(inp.to(device))
-    print(out.shape)
-
-    model.eval()
-    out = model(inp.to(device))
-    print(out.device)
     print(out.shape)
